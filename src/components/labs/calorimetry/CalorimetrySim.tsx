@@ -4,17 +4,23 @@ import { useState } from "react";
 import SectionTabs from "./SectionTabs";
 import StationCanvas from "./StationCanvas";
 import StationTabs from "./StationTabs";
-import { CalorimetrySection, getStationsFor } from "./types";
+import { CalorimetrySection, getMaterialsFor, getStationsFor } from "./types";
 
 export default function CalorimetrySim() {
   const [activeSection, setActiveSection] = useState<CalorimetrySection>("metal");
   const stations = getStationsFor(activeSection);
+  const materials = getMaterialsFor(activeSection);
   const [activeStation, setActiveStation] = useState(stations[0].id);
+  const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
 
   const selectSection = (section: CalorimetrySection) => {
     setActiveSection(section);
     setActiveStation(getStationsFor(section)[0].id);
+    setSelectedMaterial(null);
   };
+
+  const selectMaterial = (materialId: string) =>
+    setSelectedMaterial((current) => (current === materialId ? null : materialId));
 
   const station = stations.find((s) => s.id === activeStation) ?? stations[0];
 
@@ -24,7 +30,12 @@ export default function CalorimetrySim() {
       <StationTabs stations={stations} activeStation={activeStation} onSelect={setActiveStation} />
 
       <div className="p-4">
-        <StationCanvas station={station} />
+        <StationCanvas
+          station={station}
+          materials={materials}
+          selectedMaterial={selectedMaterial}
+          onSelectMaterial={selectMaterial}
+        />
       </div>
     </div>
   );

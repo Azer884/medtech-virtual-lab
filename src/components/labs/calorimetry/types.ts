@@ -68,3 +68,24 @@ export const BIOMASS_STATIONS: StationInfo[] = [
 export function getStationsFor(section: CalorimetrySection): StationInfo[] {
   return section === "metal" ? METAL_STATIONS : BIOMASS_STATIONS;
 }
+
+/** A pickable material shown in the bench inventory for a section. */
+export interface MaterialInfo {
+  id: string;
+  label: string;
+}
+
+export const METAL_MATERIALS: MaterialInfo[] = [
+  { id: "zinc", label: "Zinc (Zn)" },
+  { id: "aluminum", label: "Aluminum (Al)" },
+  { id: "tin", label: "Tin (Sn)" },
+];
+
+export const BIOMASS_MATERIALS: MaterialInfo[] = [
+  { id: "wood-chips", label: "Wood Chips / Splints" },
+  { id: "dried-grass", label: "Dried Grass / Corn Stalks" },
+];
+
+export function getMaterialsFor(section: CalorimetrySection): MaterialInfo[] {
+  return section === "metal" ? METAL_MATERIALS : BIOMASS_MATERIALS;
+}
