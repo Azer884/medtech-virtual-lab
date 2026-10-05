@@ -954,6 +954,210 @@
           "required": true
         }
       ]
+    },
+    {
+      "id": "calorimetry",
+      "title": "Calorimetry",
+      "labTitle": "Experiment 4. Calorimetry",
+      "description": "Measure heat changes at constant pressure and constant volume using a coffee-cup calorimeter and a tin-can biomass calorimeter, then calculate the specific heat capacities of metals and the energy released by burning biomass fuels.",
+      "thumbnail": "/images/thumbnail_calorimetry.png",
+      "category": "chemistry",
+      "difficulty": "Intermediate",
+      "duration": "90 min",
+      "topics": [
+        "Calorimetry",
+        "Heat Transfer",
+        "Specific Heat",
+        "Constant Pressure",
+        "Constant Volume",
+        "Thermal Equilibrium",
+        "Biomass Combustion",
+        "Enthalpy"
+      ],
+      "tags": [
+        "Calorimetry",
+        "Heat",
+        "Specific Heat Capacity",
+        "Thermochemistry",
+        "Coffee Cup Calorimeter",
+        "Biomass",
+        "Enthalpy"
+      ],
+      "objectives": [
+        "Understand the basics of calorimetry in different setups",
+        "Measure the heat change during a reaction or process at both constant pressure and constant volume",
+        "Calculate the specific heat capacities of metals and the energy changes in water"
+      ],
+      "metadata": {
+        "sourceTitle": "Experiment 4. Calorimetry",
+        "course": "CHEM LABS / MEDTECH CHEMISTRY LABS",
+        "level": "Freshman",
+        "institution": "SMU, MedTech"
+      },
+      "questions": [
+        {
+          "id": "calorimetry-prelab-1",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Purpose of a Calorimeter",
+          "description": "What is the purpose of a calorimeter in an experiment?",
+          "instruction": "Explain what a calorimeter measures and why that measurement matters.",
+          "responseFormat": "Open-ended / Explanation",
+          "sourceLabel": "Pre-Lab 1",
+          "points": 5,
+          "required": true
+        },
+        {
+          "id": "calorimetry-prelab-2",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Conservation of Energy in Calorimetry",
+          "description": "How does the law of conservation of energy apply to calorimetry?",
+          "instruction": "Relate heat lost by one component to heat gained by another within an isolated system.",
+          "responseFormat": "Open-ended / Explanation",
+          "sourceLabel": "Pre-Lab 2",
+          "points": 5,
+          "required": true
+        },
+        {
+          "id": "calorimetry-prelab-3",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Calculating Enthalpy Change from Calorimetry Data",
+          "description": "How do you use calorimetry data to calculate the enthalpy change (ΔH) of a reaction?",
+          "instruction": "Describe how q = m × s × ΔT connects measured temperature change to ΔH.",
+          "responseFormat": "Open-ended / Explanation",
+          "sourceLabel": "Pre-Lab 3",
+          "points": 6,
+          "required": true
+        },
+        {
+          "id": "calorimetry-q1",
+          "labId": "calorimetry",
+          "type": "table",
+          "title": "Part A: Constant Pressure Calorimetry (Metals)",
+          "description": "For each metal sample (M1, M2, M3), record initial mass, initial and final temperature, final mass, observations, and calculated heat q.",
+          "instruction": "Fill in the data table for each metal sample used in the coffee-cup calorimeter.",
+          "responseFormat": "Table filling",
+          "sourceLabel": "Data Table - Part A",
+          "points": 15,
+          "required": true,
+          "tableConfig": {
+            "columns": [
+              "sample",
+              "initial_mass",
+              "t_initial",
+              "t_final",
+              "final_mass",
+              "observation",
+              "q"
+            ],
+            "rows": 3,
+            "headers": [
+              "Sample",
+              "Initial Mass",
+              "T°i",
+              "T°f",
+              "Final Mass",
+              "Observation",
+              "q"
+            ]
+          }
+        },
+        {
+          "id": "calorimetry-q2",
+          "labId": "calorimetry",
+          "type": "table",
+          "title": "Part B: Constant Volume Calorimetry (Biomass)",
+          "description": "For each biomass fuel sample, record initial mass, initial and final water temperature, final mass, observations, and calculated heat q.",
+          "instruction": "Fill in the data table for each biomass sample burned in the tin-can calorimeter.",
+          "responseFormat": "Table filling",
+          "sourceLabel": "Data Table - Part B",
+          "points": 15,
+          "required": true,
+          "tableConfig": {
+            "columns": [
+              "sample",
+              "initial_mass",
+              "t_initial",
+              "t_final",
+              "final_mass",
+              "observation",
+              "q"
+            ],
+            "rows": 2,
+            "headers": [
+              "Sample",
+              "Initial Mass",
+              "T°i",
+              "T°f",
+              "Final Mass",
+              "Observation",
+              "q"
+            ]
+          }
+        },
+        {
+          "id": "calorimetry-postlab-1",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Specific Heat of the Metals",
+          "description": "Calculate and compare the amount of specific heat ‘s’ for the different metals (specific heat of water = 4.184 J/g-K).",
+          "instruction": "Show the calculation for each metal and compare the resulting specific heats.",
+          "responseFormat": "Open-ended / Calculation",
+          "sourceLabel": "Post-Lab 1",
+          "points": 8,
+          "required": true
+        },
+        {
+          "id": "calorimetry-postlab-2",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Purpose of Stirring",
+          "description": "Why is it necessary to stir the contents of the calorimeter during the experiment?",
+          "instruction": "Explain how stirring affects temperature uniformity and measurement accuracy.",
+          "responseFormat": "Open-ended / Explanation",
+          "sourceLabel": "Post-Lab 2",
+          "points": 4,
+          "required": true
+        },
+        {
+          "id": "calorimetry-postlab-3",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Comparing Measured and Literature Specific Heats",
+          "description": "Compare the calculated specific heats to literature values. What factors could contribute to any discrepancies?",
+          "instruction": "Discuss sources of experimental error such as heat loss, incomplete thermal equilibrium, or calorimeter heat capacity.",
+          "responseFormat": "Open-ended / Analysis",
+          "sourceLabel": "Post-Lab 3",
+          "points": 6,
+          "required": true
+        },
+        {
+          "id": "calorimetry-postlab-4",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Minimizing Heat Loss",
+          "description": "Describe how you could modify the experimental setup to minimize heat loss to the surroundings.",
+          "instruction": "Suggest at least one concrete modification to the calorimeter setup.",
+          "responseFormat": "Open-ended / Explanation",
+          "sourceLabel": "Post-Lab 4",
+          "points": 4,
+          "required": true
+        },
+        {
+          "id": "calorimetry-postlab-5",
+          "labId": "calorimetry",
+          "type": "text",
+          "title": "Real-Life Application of Calorimetry",
+          "description": "Describe a real-life application where calorimetry is used and explain why understanding enthalpy or internal energy changes is important in that context.",
+          "instruction": "Give one concrete real-world example and connect it to enthalpy or internal energy.",
+          "responseFormat": "Open-ended / Application",
+          "sourceLabel": "Post-Lab 5",
+          "points": 5,
+          "required": true
+        }
+      ]
     }
   ]
 }
