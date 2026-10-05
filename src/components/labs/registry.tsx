@@ -20,10 +20,15 @@ const HydrocarbonsSim = dynamic(
   () => import("./identification-of-hydrocarbons/HydrocarbonsSim"),
   { ssr: false, loading: SimLoader },
 );
+const CalorimetrySim = dynamic(() => import("./calorimetry/CalorimetrySim"), {
+  ssr: false,
+  loading: SimLoader,
+});
 
 export const labSimRegistry: Record<string, ComponentType> = {
   "laws-of-collisions": CollisionSim,
   "coulombs-law": CoulombsLawSim,
   "standing-waves": StandingWavesSim,
   "identification-of-hydrocarbons": HydrocarbonsSim,
+  calorimetry: CalorimetrySim,
 };
