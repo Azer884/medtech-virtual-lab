@@ -21,13 +21,9 @@ export default function CalorimetrySim() {
   return (
     <div className="w-full border-2 border-[var(--sim-border)] bg-[var(--sim-neutral-50)]">
       <SectionTabs activeSection={activeSection} onSelect={selectSection} />
+      <StationTabs stations={stations} activeStation={activeStation} onSelect={setActiveStation} />
 
-      <div className="flex flex-col md:flex-row gap-4 p-4">
-        <StationTabs
-          stations={stations}
-          activeStation={activeStation}
-          onSelect={setActiveStation}
-        />
+      <div className="p-4">
         <StationCanvas station={station} />
       </div>
     </div>
