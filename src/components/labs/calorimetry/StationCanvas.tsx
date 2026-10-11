@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import CalorimetryUnity from "./CalorimetryUnity";
 import MaterialInventory from "./MaterialInventory";
-import { MaterialInfo, StationInfo } from "./types";
+import { CalorimetrySection, MaterialInfo, StationInfo } from "./types";
 
 interface StationCanvasProps {
+  section: CalorimetrySection;
   station: StationInfo;
   materials: MaterialInfo[];
 }
 
 /**
- * Bench canvas for the active station. Materials can be dragged in from the
- * inventory and dropped here — dropping just places a ball for now, no
+ * Bench canvas for the active station. Unity draws the station's apparatus
+ * underneath; materials can be dragged in from the inventory and dropped here — dropping just places a ball for now, no
  * chemistry/reaction logic wired up yet.
  */
-export default function StationCanvas({ station, materials }: StationCanvasProps) {
+export default function StationCanvas({ section, station, materials }: StationCanvasProps) {
   const [droppedMaterial, setDroppedMaterial] = useState<MaterialInfo | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -39,15 +41,19 @@ export default function StationCanvas({ station, materials }: StationCanvasProps
           : "border-[var(--sim-border)]"
       }`}
     >
-      <span className="text-sm font-bold tracking-widest text-[var(--sim-label)] uppercase">
-        {station.label}
-      </span>
-      <p className="max-w-md text-sm text-[var(--sim-neutral-500)]">
-        {station.description}
-      </p>
+      <CalorimetryUnity section={section} station={station.id} />
+
+      <div className="absolute top-3 left-3 right-3 flex flex-col items-center gap-1 pointer-events-none">
+        <span className="text-sm font-bold tracking-widest text-[var(--sim-label)] uppercase">
+          {station.label}
+        </span>
+        <p className="max-w-md text-sm text-[var(--sim-neutral-500)]">
+          {station.description}
+        </p>
+      </div>
 
       {droppedMaterial ? (
-        <div className="flex flex-col items-center gap-1.5 mt-2">
+        <div className="relative flex flex-col items-center gap-1.5 mt-2">
           <div
             role="img"
             aria-label={droppedMaterial.label}
@@ -59,7 +65,7 @@ export default function StationCanvas({ station, materials }: StationCanvasProps
           </span>
         </div>
       ) : (
-        <span className="mt-2 text-xs italic text-[var(--sim-neutral-400)]">
+        <span className="relative mt-2 text-xs italic text-[var(--sim-neutral-400)]">
           Drag a material here.
         </span>
       )}

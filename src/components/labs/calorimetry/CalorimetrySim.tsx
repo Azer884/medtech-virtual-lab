@@ -25,7 +25,7 @@ export default function CalorimetrySim() {
       <StationTabs stations={stations} activeStation={activeStation} onSelect={setActiveStation} />
 
       <div className="p-4">
-        <StationCanvas station={station} materials={materials} />
+        <StationCanvas section={activeSection} station={station} materials={materials} />
       </div>
     </div>
   );
