@@ -69,7 +69,11 @@ export interface UnityWorkbenchState {
 
 /** What Unity sends back. Mirrors WorkbenchEventDto on the C# side. */
 export interface UnityWorkbenchEvent {
-  type: "ready" | "drip";
+  /**
+   * heater-toggle comes from the calorimetry bench's hot plate; drop-target
+   * answers a calorimetry DragHover, with accepted true over the apparatus.
+   */
+  type: "ready" | "drip" | "heater-toggle" | "drop-target";
   target: "tube" | "watchglass" | "none";
   /** Which sample's bench the droplet landed on, so split panes stay separate. */
   sample: SampleId | "";

@@ -30,8 +30,21 @@ export default function MaterialInventory({ materials, inUseIds = [] }: Material
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = "copy";
               e.dataTransfer.setData("text/plain", material.id);
+              // Only the sample is carried, not its white case: the browser
+              // snapshots the drag image, so it gets a bare copy of the
+              // transparent picture, parked off-screen for the snapshot.
+              // Cloned from the case's own img, which has already loaded, so
+              // the copy is ready the moment the browser snapshots it.
               const image = e.currentTarget.querySelector("img");
-              if (image) e.dataTransfer.setDragImage(image, image.width / 2, image.height / 2);
+              if (!image) return;
+              const ghost = image.cloneNode() as HTMLImageElement;
+              ghost.removeAttribute("class");
+              ghost.width = 56;
+              ghost.height = 56;
+              ghost.style.cssText = "position:fixed;top:-1000px;left:-1000px;background:transparent;pointer-events:none";
+              document.body.appendChild(ghost);
+              e.dataTransfer.setDragImage(ghost, 28, 28);
+              window.setTimeout(() => ghost.remove(), 0);
             }}
             title={inUse ? `${material.label} (on a station)` : material.label}
             className={`w-24 flex flex-col items-center gap-1 border-2 shadow-md px-2 py-2 select-none transition-colors duration-100 ${
@@ -55,7 +68,7 @@ export default function MaterialInventory({ materials, inUseIds = [] }: Material
             )}
             <span
               className={`text-[10px] font-semibold text-center leading-tight ${
-                inUse ? "text-[var(--sim-neutral-400)]" : "text-[var(--sim-neutral-700)]"
+                inUse ? "text-[var(--sim-neutral-500)]" : "text-[var(--sim-neutral-900)]"
               }`}
             >
               {material.label}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { RefObject, useCallback, useEffect, useRef } from "react";
 import {
   UNITY_BRIDGE_OBJECT,
   UNITY_EVENT_NAME,
@@ -12,8 +12,26 @@ import { UnityCalorimetrySnapshot } from "./unityState";
 const BUILD_URL = "/unity/calorimetry";
 const BUILD_NAME = "calorimetry";
 
+/**
+ * Lets the canvas ask the 3D bench what is under the pointer while a sample is
+ * dragged, since an HTML drag never reaches Unity's own input.
+ */
+export interface DropProbe {
+  /**
+   * Outlines the station's apparatus if the point is over it. True over the
+   * apparatus, false elsewhere, null while the bench isn't running.
+   */
+  hover: (clientX: number, clientY: number) => boolean | null;
+  /** Clears the outline. */
+  end: () => void;
+}
+
 interface CalorimetryUnityProps {
   snapshot: UnityCalorimetrySnapshot;
+  /** Filled in with the drop probe while the bench is running. */
+  probeRef: RefObject<DropProbe | null>;
+  /** The hot plate's red button was clicked in the 3D bench. */
+  onHeaterToggle: () => void;
 }
 
 /**
@@ -22,8 +40,11 @@ interface CalorimetryUnityProps {
  * section and station sent here, along with the samples, readouts and water
  * React decides. Mirrors CalorimetryWorkbenchView on the C# side.
  */
-export default function CalorimetryUnity({ snapshot }: CalorimetryUnityProps) {
+export default function CalorimetryUnity({ snapshot, probeRef, onHeaterToggle }: CalorimetryUnityProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Set by Unity's drop-target reply, which arrives synchronously inside the
+  // DragHover SendMessage, so hover() can return it straight away.
+  const hitRef = useRef(false);
 
   const { status, progress, error, instanceRef } = useUnityInstance(canvasRef, {
     buildUrl: BUILD_URL,
@@ -48,11 +69,38 @@ export default function CalorimetryUnity({ snapshot }: CalorimetryUnityProps) {
     const handle = (event: Event) => {
       const detail = (event as CustomEvent<UnityWorkbenchEvent>).detail;
       if (detail?.type === "ready") sendState();
+      else if (detail?.type === "heater-toggle") onHeaterToggle();
+      else if (detail?.type === "drop-target") hitRef.current = detail.accepted;
     };
 
     window.addEventListener(UNITY_EVENT_NAME, handle);
     return () => window.removeEventListener(UNITY_EVENT_NAME, handle);
-  }, [sendState]);
+  }, [sendState, onHeaterToggle]);
+
+  useEffect(() => {
+    if (status !== "ready") return;
+
+    probeRef.current = {
+      hover: (clientX, clientY) => {
+        const instance = instanceRef.current;
+        const canvas = canvasRef.current;
+        if (!instance || !canvas) return null;
+
+        // Unity's screen space is bottom-up, so y is flipped here.
+        const rect = canvas.getBoundingClientRect();
+        const x = (clientX - rect.left) / rect.width;
+        const y = 1 - (clientY - rect.top) / rect.height;
+        hitRef.current = false;
+        instance.SendMessage(UNITY_BRIDGE_OBJECT, "DragHover", `${x.toFixed(4)},${y.toFixed(4)}`);
+        return hitRef.current;
+      },
+      end: () => instanceRef.current?.SendMessage(UNITY_BRIDGE_OBJECT, "DragEnd"),
+    };
+
+    return () => {
+      probeRef.current = null;
+    };
+  }, [probeRef, instanceRef, status]);
 
   if (status === "error") {
     return (

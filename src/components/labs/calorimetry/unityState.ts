@@ -2,6 +2,8 @@ import {
   CalorimetryBench,
   CalorimetrySection,
   MaterialInfo,
+  bathBoil,
+  bathReading,
   sampleAt,
   scaleReading,
 } from "./types";
@@ -31,6 +33,12 @@ export interface UnityCalorimetryState {
   waterColor: string;
   beakerFill: number;
   flaskFill: number;
+  /** Lights the hot plate's red button. */
+  heaterOn: boolean;
+  /** Text on the hot plate's display: the bath temperature. */
+  heaterReadout: string;
+  /** How hard the bath water bubbles, 0..1. */
+  boil: number;
 }
 
 export interface UnityCalorimetrySnapshot {
@@ -60,6 +68,9 @@ export function toUnitySnapshot(
       waterColor: bench.waterColor,
       beakerFill: bench.beakerFill,
       flaskFill: bench.flaskFill,
+      heaterOn: bench.heaterOn,
+      heaterReadout: bathReading(bench),
+      boil: bathBoil(bench),
     },
   };
 }

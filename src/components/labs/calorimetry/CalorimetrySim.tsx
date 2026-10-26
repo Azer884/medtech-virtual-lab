@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import SectionTabs from "./SectionTabs";
 import StationCanvas from "./StationCanvas";
 import StationTabs from "./StationTabs";
@@ -8,8 +8,10 @@ import {
   CalorimetryBench,
   CalorimetrySection,
   INITIAL_BENCH,
+  bathSettled,
   getMaterialsFor,
   getStationsFor,
+  stepBath,
 } from "./types";
 import { toUnitySnapshot } from "./unityState";
 
@@ -49,6 +51,21 @@ export default function CalorimetrySim() {
     });
   };
 
+  // Stable, so the Unity event listener isn't re-attached every render.
+  const toggleHeater = useCallback(() => {
+    setBench((prev) => ({ ...prev, heaterOn: !prev.heaterOn }));
+  }, []);
+
+  // The bath heats and cools in real time whichever station is open, so a
+  // plate left on while weighing elsewhere keeps warming the water.
+  const settled = bathSettled(bench);
+  useEffect(() => {
+    if (settled) return;
+    const tickMs = 250;
+    const id = window.setInterval(() => setBench((prev) => stepBath(prev, tickMs / 1000)), tickMs);
+    return () => window.clearInterval(id);
+  }, [settled]);
+
   // Memoised so Unity only gets a SetState when something it draws changed.
   const snapshot = useMemo(
     () => toUnitySnapshot(bench, activeSection, station.id),
@@ -69,6 +86,7 @@ export default function CalorimetrySim() {
           snapshot={snapshot}
           onPlaceSample={placeSample}
           onRemoveSample={removeSample}
+          onHeaterToggle={toggleHeater}
         />
       </div>
     </div>

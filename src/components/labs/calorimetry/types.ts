@@ -167,13 +167,30 @@ export interface CalorimetryBench {
   beakerFill: number;
   /** Flask in the tin can calorimeter, 0..1. */
   flaskFill: number;
+  /** Whether the hot plate under the water bath is switched on. */
+  heaterOn: boolean;
+  /** Water bath temperature, °C. */
+  bathTemp: number;
 }
+
+/** Lab room temperature, °C: where the bath starts and cools back to. */
+export const ROOM_TEMP = 22;
+/** The bath can't get hotter than boiling water, °C. */
+export const BOILING_POINT = 100;
+/** Hot plate heating, °C/s, before losses to the room. */
+const HEATER_POWER = 2.5;
+/** Newton's-law loss to the room, per second. */
+const COOLING_RATE = 0.012;
+/** The water starts to bubble a little from here, °C. */
+const SIMMER_FROM = 70;
 
 export const INITIAL_BENCH: CalorimetryBench = {
   placements: { metal: {}, biomass: {} },
   waterColor: "#9eccf28c",
   beakerFill: 0.6,
   flaskFill: 0.55,
+  heaterOn: false,
+  bathTemp: ROOM_TEMP,
 };
 
 /** The sample on a station, or undefined when the station is empty. */
@@ -193,6 +210,38 @@ export function samplesInUse(bench: CalorimetryBench, section: CalorimetrySectio
 /** What the balance shows, formatted like its two-decimal LCD. */
 export function scaleReading(bench: CalorimetryBench, section: CalorimetrySection): string {
   return (sampleAt(bench, section, "balance")?.massGrams ?? 0).toFixed(2);
+}
+
+/**
+ * Advances the bath's temperature by dt seconds: the plate heats it while on,
+ * it always loses heat to the room, and it holds at boiling once there.
+ */
+export function stepBath(bench: CalorimetryBench, dt: number): CalorimetryBench {
+  const power = bench.heaterOn ? HEATER_POWER : 0;
+  const rate = power - COOLING_RATE * (bench.bathTemp - ROOM_TEMP);
+  const bathTemp = Math.min(BOILING_POINT, Math.max(ROOM_TEMP, bench.bathTemp + rate * dt));
+  return bathTemp === bench.bathTemp ? bench : { ...bench, bathTemp };
+}
+
+/** True once the bath has nothing left to do: plate off and back at room temperature. */
+export function bathSettled(bench: CalorimetryBench): boolean {
+  return !bench.heaterOn && bench.bathTemp <= ROOM_TEMP;
+}
+
+/**
+ * How hard the bath bubbles, 0..1: a few bubbles from SIMMER_FROM, a rolling
+ * boil at BOILING_POINT. Only while the plate is on, since water taken off the
+ * heat stops boiling at once.
+ */
+export function bathBoil(bench: CalorimetryBench): number {
+  if (!bench.heaterOn) return 0;
+  const t = (bench.bathTemp - SIMMER_FROM) / (BOILING_POINT - SIMMER_FROM);
+  return Math.min(1, Math.max(0, t));
+}
+
+/** The bath temperature as the hot plate's display shows it. */
+export function bathReading(bench: CalorimetryBench): string {
+  return `${bench.bathTemp.toFixed(1)}°C`;
 }
 
 export function getMaterialsFor(section: CalorimetrySection): MaterialInfo[] {
