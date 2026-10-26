@@ -7,23 +7,22 @@ import {
   UnityWorkbenchEvent,
 } from "../identification-of-hydrocarbons/unity/protocol";
 import { useUnityInstance } from "../identification-of-hydrocarbons/unity/useUnityInstance";
-import { CalorimetrySection } from "./types";
+import { UnityCalorimetrySnapshot } from "./unityState";
 
 const BUILD_URL = "/unity/calorimetry";
 const BUILD_NAME = "calorimetry";
 
 interface CalorimetryUnityProps {
-  section: CalorimetrySection;
-  station: string;
+  snapshot: UnityCalorimetrySnapshot;
 }
 
 /**
  * The Unity bench for the calorimetry lab. Unity only draws the apparatus:
  * each station page shows its own piece of equipment, picked from the
- * section and station sent here. Mirrors CalorimetryWorkbenchView on the C#
- * side.
+ * section and station sent here, along with the samples, readouts and water
+ * React decides. Mirrors CalorimetryWorkbenchView on the C# side.
  */
-export default function CalorimetryUnity({ section, station }: CalorimetryUnityProps) {
+export default function CalorimetryUnity({ snapshot }: CalorimetryUnityProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { status, progress, error, instanceRef } = useUnityInstance(canvasRef, {
@@ -35,10 +34,10 @@ export default function CalorimetryUnity({ section, station }: CalorimetryUnityP
   const sendState = useCallback(() => {
     const instance = instanceRef.current;
     if (!instance) return;
-    instance.SendMessage(UNITY_BRIDGE_OBJECT, "SetState", JSON.stringify({ section, station }));
-  }, [instanceRef, section, station]);
+    instance.SendMessage(UNITY_BRIDGE_OBJECT, "SetState", JSON.stringify(snapshot));
+  }, [instanceRef, snapshot]);
 
-  // Push the station whenever it changes, and once more as soon as the
+  // Push the snapshot whenever it changes, and once more as soon as the
   // instance reports ready, since the player boots after the first renders.
   useEffect(() => {
     if (status !== "ready") return;
