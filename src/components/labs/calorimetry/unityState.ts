@@ -4,6 +4,8 @@ import {
   MaterialInfo,
   bathBoil,
   bathReading,
+  currentLook,
+  flameStrength,
   sampleAt,
   scaleReading,
 } from "./types";
@@ -39,6 +41,12 @@ export interface UnityCalorimetryState {
   heaterReadout: string;
   /** How hard the bath water bubbles, 0..1. */
   boil: number;
+  /** How hard the biomass on the tin can calorimeter's dish burns, 0..1. */
+  flame: number;
+  /** Puts the tin can, flask and thermometer over the dish. */
+  covered: boolean;
+  /** Flask water temperature, °C, for the thermometer in it to read. */
+  flaskTemp: number;
 }
 
 export interface UnityCalorimetrySnapshot {
@@ -49,9 +57,9 @@ export interface UnityCalorimetrySnapshot {
 
 const NO_SAMPLE: UnitySampleLook = { id: "", color: "#ffffff", metallic: 0, smoothness: 0.5 };
 
-function toLook(material: MaterialInfo | undefined): UnitySampleLook {
+function toLook(bench: CalorimetryBench, material: MaterialInfo | undefined): UnitySampleLook {
   if (!material) return NO_SAMPLE;
-  return { id: material.id, ...material.look };
+  return { id: material.id, ...currentLook(bench, material) };
 }
 
 export function toUnitySnapshot(
@@ -63,7 +71,7 @@ export function toUnitySnapshot(
     section,
     station,
     calorimetry: {
-      sample: toLook(sampleAt(bench, section, station)),
+      sample: toLook(bench, sampleAt(bench, section, station)),
       scaleReadout: scaleReading(bench, section),
       waterColor: bench.waterColor,
       beakerFill: bench.beakerFill,
@@ -71,6 +79,9 @@ export function toUnitySnapshot(
       heaterOn: bench.heaterOn,
       heaterReadout: bathReading(bench),
       boil: bathBoil(bench),
+      flame: flameStrength(bench),
+      covered: bench.covered,
+      flaskTemp: bench.flaskTemp,
     },
   };
 }
