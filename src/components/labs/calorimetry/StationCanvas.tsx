@@ -8,6 +8,9 @@ import {
   CalorimetrySection,
   MaterialInfo,
   StationInfo,
+  burnRemaining,
+  canIgnite,
+  FLASK_WATER_GRAMS,
   sampleAt,
   samplesInUse,
   scaleReading,
@@ -23,6 +26,7 @@ interface StationCanvasProps {
   onPlaceSample: (materialId: string) => void;
   onRemoveSample: () => void;
   onHeaterToggle: () => void;
+  onIgnite: () => void;
 }
 
 /**
@@ -42,12 +46,16 @@ export default function StationCanvas({
   onPlaceSample,
   onRemoveSample,
   onHeaterToggle,
+  onIgnite,
 }: StationCanvasProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const probeRef = useRef<DropProbe | null>(null);
   const isBalance = station.id === "balance";
   const isBath = station.id === "hot-water-bath";
+  const isTinCan = station.id === "tin-can-calorimeter";
   const onStation = sampleAt(bench, section, station.id);
+  const onStationBurning = !!onStation && bench.burning === onStation.id;
+  const onStationBurnt = !!onStation && bench.burnt.includes(onStation.id);
   const inUse = samplesInUse(bench, section);
 
   // Without a running 3D bench there is nothing to aim at, so the whole
@@ -89,6 +97,24 @@ export default function StationCanvas({
       }`}
     >
       <CalorimetryUnity snapshot={snapshot} probeRef={probeRef} onHeaterToggle={onHeaterToggle} />
+
+      {section === "biomass" && (
+        <div className="absolute top-3 left-3 flex items-center gap-2 border-2 border-[var(--sim-border)] bg-[var(--sim-neutral-0)] shadow-md px-2.5 py-1.5 pointer-events-none">
+          <span
+            aria-hidden
+            className={`h-2.5 w-2.5 rounded-full ${bench.burning !== null ? "bg-orange-500 animate-pulse" : "bg-[var(--sim-neutral-300)]"}`}
+          />
+          <span className="text-[10px] font-bold tracking-widest uppercase text-[var(--sim-label)]">
+            Flask
+          </span>
+          <span className="font-mono text-sm font-semibold tabular-nums text-[var(--sim-neutral-900)]">
+            {bench.flaskTemp.toFixed(1)} °C
+          </span>
+          <span className="text-[10px] font-semibold tabular-nums text-[var(--sim-neutral-500)]">
+            max {bench.flaskMax.toFixed(1)}
+          </span>
+        </div>
+      )}
 
       {section === "metal" && (
         <div className="absolute top-3 left-3 flex items-center gap-2 border-2 border-[var(--sim-border)] bg-[var(--sim-neutral-0)] shadow-md px-2.5 py-1.5 pointer-events-none">
@@ -134,9 +160,42 @@ export default function StationCanvas({
           </>
         )}
         <span className="text-xs text-[var(--sim-neutral-600)] leading-tight">
-          {onStation ? onStation.label : "Empty. Drag a material here from the inventory."}
+          {onStation
+            ? `${onStation.label}${onStationBurnt ? " (burnt)" : ""}`
+            : "Empty. Drag a material here from the inventory."}
         </span>
-        {onStation && (
+        {isTinCan && (
+          <>
+            <span className="font-mono text-2xl font-semibold text-[var(--sim-neutral-900)] tabular-nums">
+              {bench.flaskTemp.toFixed(1)} °C
+            </span>
+            <span className="text-xs text-[var(--sim-neutral-600)] leading-tight">
+              Max {bench.flaskMax.toFixed(1)} °C. Flask water, {FLASK_WATER_GRAMS} g.
+            </span>
+          </>
+        )}
+        {isTinCan && onStation && (
+          <>
+            <button
+              type="button"
+              onClick={onIgnite}
+              disabled={!canIgnite(bench)}
+              className="flex items-center justify-center gap-1.5 border-2 border-[var(--sim-border)] bg-[var(--sim-neutral-0)] px-2 py-1 text-xs font-bold tracking-widest uppercase text-[var(--sim-neutral-900)] enabled:hover:border-[var(--sim-accent-700)] disabled:cursor-not-allowed disabled:text-[var(--sim-neutral-500)] disabled:bg-[var(--sim-neutral-50)]"
+            >
+              <span
+                aria-hidden
+                className={`h-2.5 w-2.5 rounded-full ${onStationBurning ? "bg-orange-500 animate-pulse" : "bg-[var(--sim-neutral-300)]"}`}
+              />
+              {onStationBurning ? "Burning" : onStationBurnt ? "Burnt out" : "Ignite"}
+            </button>
+            {onStationBurning && (
+              <span className="font-mono text-xs tabular-nums text-[var(--sim-neutral-600)]">
+                {Math.ceil(burnRemaining(bench))} s left
+              </span>
+            )}
+          </>
+        )}
+        {onStation && !onStationBurning && (
           <button
             type="button"
             onClick={onRemoveSample}

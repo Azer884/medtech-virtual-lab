@@ -53,15 +53,10 @@ export const BIOMASS_STATIONS: StationInfo[] = [
     description: "Weigh the biomass sample before and after burning.",
   },
   {
-    id: "burn-plate",
-    label: "Burn Plate",
-    description: "Light the biomass sample on the pie plate and mortar screen.",
-  },
-  {
     id: "tin-can-calorimeter",
     label: "Tin Can Calorimeter",
     description:
-      "Assemble the tin can and water flask over the burning sample, stir, and record the maximum temperature.",
+      "Set the biomass on the dish and light it. The tin can and water flask go over it: record the maximum temperature.",
   },
 ];
 
@@ -95,6 +90,10 @@ export interface MaterialInfo {
   specificHeat?: number;
   /** Biomass only: approximate heat of combustion, kJ/g. */
   heatOfCombustion?: number;
+  /** Biomass only: seconds it burns for once lit. */
+  burnSeconds?: number;
+  /** Biomass only: fraction of its mass left as ash and char after burning. */
+  residueFraction?: number;
 }
 
 // The three metal samples are the same size puck, so their masses follow
@@ -134,6 +133,8 @@ export const BIOMASS_MATERIALS: MaterialInfo[] = [
     look: { color: "#8a5a32", metallic: 0, smoothness: 0.25 },
     massGrams: 2.35,
     heatOfCombustion: 18,
+    burnSeconds: 40,
+    residueFraction: 0.12,
   },
   {
     id: "dried-grass",
@@ -142,6 +143,8 @@ export const BIOMASS_MATERIALS: MaterialInfo[] = [
     look: { color: "#b3a24f", metallic: 0, smoothness: 0.2 },
     massGrams: 1.84,
     heatOfCombustion: 16,
+    burnSeconds: 25,
+    residueFraction: 0.08,
   },
 ];
 
@@ -171,6 +174,18 @@ export interface CalorimetryBench {
   heaterOn: boolean;
   /** Water bath temperature, °C. */
   bathTemp: number;
+  /** The biomass sample alight on the burn plate, or null when nothing burns. */
+  burning: string | null;
+  /** Seconds the burning sample has been alight. */
+  burnTime: number;
+  /** Biomass samples already burnt down to ash. They can't be lit again. */
+  burnt: string[];
+  /** Whether the tin can, with the water flask on it, stands over the dish. */
+  covered: boolean;
+  /** Water in the flask on the tin can, °C. */
+  flaskTemp: number;
+  /** The highest the flask water has reached since it was last filled, °C. */
+  flaskMax: number;
 }
 
 /** Lab room temperature, °C: where the bath starts and cools back to. */
@@ -183,6 +198,25 @@ const HEATER_POWER = 2.5;
 const COOLING_RATE = 0.012;
 /** The water starts to bubble a little from here, °C. */
 const SIMMER_FROM = 70;
+/** A lit sample takes this long to catch fully, s. */
+const CATCH_SECONDS = 3;
+/** And dies down over this long at the end, s. */
+const DIE_DOWN_SECONDS = 8;
+/** Water in the flask on the tin can, g. */
+export const FLASK_WATER_GRAMS = 100;
+/** Specific heat of water, J/(g·°C). */
+const WATER_SPECIFIC_HEAT = 4.184;
+/**
+ * Share of a burning sample's heat that reaches the flask water. A tin can
+ * calorimeter loses most of it to the can, the air and the smoke.
+ */
+const CAN_EFFICIENCY = 0.25;
+/** Newton's-law loss from the flask water to the room, per second. */
+const FLASK_COOLING_RATE = 0.002;
+/** Biomass burns on the tin can calorimeter's dish. */
+const BURN_STATION = "tin-can-calorimeter";
+/** What a burnt sample looks like: ash and char. */
+const ASH_LOOK: MaterialLook = { color: "#2e2a27", metallic: 0, smoothness: 0.1 };
 
 export const INITIAL_BENCH: CalorimetryBench = {
   placements: { metal: {}, biomass: {} },
@@ -191,6 +225,12 @@ export const INITIAL_BENCH: CalorimetryBench = {
   flaskFill: 0.55,
   heaterOn: false,
   bathTemp: ROOM_TEMP,
+  burning: null,
+  burnTime: 0,
+  burnt: [],
+  covered: false,
+  flaskTemp: ROOM_TEMP,
+  flaskMax: ROOM_TEMP,
 };
 
 /** The sample on a station, or undefined when the station is empty. */
@@ -207,9 +247,115 @@ export function samplesInUse(bench: CalorimetryBench, section: CalorimetrySectio
   return Object.values(bench.placements[section]);
 }
 
+/** A sample's mass now: what is left of it once burnt. */
+export function currentMass(bench: CalorimetryBench, material: MaterialInfo): number {
+  if (!bench.burnt.includes(material.id)) return material.massGrams;
+  return material.massGrams * (material.residueFraction ?? 0);
+}
+
+/** How a sample looks now: ash once it has burnt. */
+export function currentLook(bench: CalorimetryBench, material: MaterialInfo): MaterialLook {
+  return bench.burnt.includes(material.id) ? ASH_LOOK : material.look;
+}
+
 /** What the balance shows, formatted like its two-decimal LCD. */
 export function scaleReading(bench: CalorimetryBench, section: CalorimetrySection): string {
-  return (sampleAt(bench, section, "balance")?.massGrams ?? 0).toFixed(2);
+  const sample = sampleAt(bench, section, "balance");
+  return (sample ? currentMass(bench, sample) : 0).toFixed(2);
+}
+
+/**
+ * Whether the sample on the calorimeter's dish can be lit: there, unburnt,
+ * and nothing already alight.
+ */
+export function canIgnite(bench: CalorimetryBench): boolean {
+  const sample = sampleAt(bench, "biomass", BURN_STATION);
+  return !!sample && bench.burning === null && !bench.burnt.includes(sample.id);
+}
+
+/** Lights the sample on the dish and puts the can, flask and thermometer over it. */
+export function ignite(bench: CalorimetryBench): CalorimetryBench {
+  if (!canIgnite(bench)) return bench;
+  return { ...bench, burning: bench.placements.biomass[BURN_STATION], burnTime: 0, covered: true };
+}
+
+/**
+ * Lifts the can off the dish and swaps in a flask of fresh water at room
+ * temperature, ready for the next sample. Never while one is burning.
+ */
+export function uncover(bench: CalorimetryBench): CalorimetryBench {
+  if (bench.burning !== null) return bench;
+  return { ...bench, covered: false, flaskTemp: ROOM_TEMP, flaskMax: ROOM_TEMP };
+}
+
+function burnSecondsOf(material: MaterialInfo): number {
+  return material.burnSeconds ?? 30;
+}
+
+/**
+ * How hard a sample burns t seconds after it was lit, 0..1: it catches over
+ * the first few seconds, burns steadily, then dies down as the fuel runs out.
+ */
+function flameAt(material: MaterialInfo, t: number): number {
+  const catching = Math.min(1, t / CATCH_SECONDS);
+  const dying = Math.min(1, Math.max(0, burnSecondsOf(material) - t) / DIE_DOWN_SECONDS);
+  return Math.max(0.05, Math.min(catching, dying));
+}
+
+/** ∫ flameAt dt over a whole burn, so the heat given off sums to the sample's full share. */
+const flameTotals = new Map<string, number>();
+function flameTotal(material: MaterialInfo): number {
+  let total = flameTotals.get(material.id);
+  if (total === undefined) {
+    const step = 0.05;
+    total = 0;
+    for (let t = 0; t < burnSecondsOf(material); t += step) total += flameAt(material, t + step / 2) * step;
+    flameTotals.set(material.id, total);
+  }
+  return total;
+}
+
+/** Heat the burning sample gives the flask water per second right now, J/s. */
+function heatIntoFlask(bench: CalorimetryBench, material: MaterialInfo): number {
+  if (!bench.covered) return 0;
+  const joules = material.massGrams * (material.heatOfCombustion ?? 0) * 1000 * CAN_EFFICIENCY;
+  return (joules * flameAt(material, bench.burnTime)) / flameTotal(material);
+}
+
+/**
+ * Advances the tin can by dt seconds: the sample burns down, turning to ash
+ * once it has burnt for its time, its heat warms the flask water, and the
+ * water always loses a little to the room.
+ */
+export function stepFlask(bench: CalorimetryBench, dt: number): CalorimetryBench {
+  const material = findMaterial(bench.burning);
+  const heating = material ? heatIntoFlask(bench, material) / (FLASK_WATER_GRAMS * WATER_SPECIFIC_HEAT) : 0;
+  const rate = heating - FLASK_COOLING_RATE * (bench.flaskTemp - ROOM_TEMP);
+  const flaskTemp = Math.min(BOILING_POINT, Math.max(ROOM_TEMP, bench.flaskTemp + rate * dt));
+  const next = { ...bench, flaskTemp, flaskMax: Math.max(bench.flaskMax, flaskTemp) };
+
+  if (!material) return next;
+  const burnTime = bench.burnTime + dt;
+  if (burnTime < burnSecondsOf(material)) return { ...next, burnTime };
+  return { ...next, burning: null, burnTime: 0, burnt: [...bench.burnt, material.id] };
+}
+
+/** True once the tin can has nothing left to do: nothing alight and the water back at room temperature. */
+export function flaskSettled(bench: CalorimetryBench): boolean {
+  return bench.burning === null && bench.flaskTemp <= ROOM_TEMP;
+}
+
+/** Seconds of burning left, or 0 when nothing is alight. */
+export function burnRemaining(bench: CalorimetryBench): number {
+  const material = findMaterial(bench.burning);
+  if (!material) return 0;
+  return Math.max(0, burnSecondsOf(material) - bench.burnTime);
+}
+
+/** How hard the sample on the calorimeter's dish is burning, 0..1. */
+export function flameStrength(bench: CalorimetryBench): number {
+  const material = findMaterial(bench.burning);
+  return material ? flameAt(material, bench.burnTime) : 0;
 }
 
 /**
