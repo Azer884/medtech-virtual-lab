@@ -10,6 +10,10 @@ import {
   StationInfo,
   burnRemaining,
   canIgnite,
+  CUP_COLD_TEMP,
+  CUP_WATER_GRAMS,
+  cupSettled,
+  metalTempOf,
   FLASK_WATER_GRAMS,
   sampleAt,
   samplesInUse,
@@ -53,6 +57,7 @@ export default function StationCanvas({
   const isBalance = station.id === "balance";
   const isBath = station.id === "hot-water-bath";
   const isTinCan = station.id === "tin-can-calorimeter";
+  const isCup = station.id === "coffee-cup-calorimeter";
   const onStation = sampleAt(bench, section, station.id);
   const onStationBurning = !!onStation && bench.burning === onStation.id;
   const onStationBurnt = !!onStation && bench.burnt.includes(onStation.id);
@@ -164,6 +169,35 @@ export default function StationCanvas({
             ? `${onStation.label}${onStationBurnt ? " (burnt)" : ""}`
             : "Empty. Drag a material here from the inventory."}
         </span>
+        {section === "metal" && onStation && (
+          <span className="font-mono text-xs font-semibold tabular-nums text-[var(--sim-neutral-700)]">
+            Metal {metalTempOf(bench, onStation.id).toFixed(1)} °C
+          </span>
+        )}
+        {isCup && (
+          <>
+            <span className="font-mono text-2xl font-semibold text-[var(--sim-neutral-900)] tabular-nums">
+              {bench.cupTemp.toFixed(1)} °C
+            </span>
+            <span className="text-xs text-[var(--sim-neutral-600)] leading-tight">
+              Cold water, {CUP_WATER_GRAMS} g, from {CUP_COLD_TEMP.toFixed(1)} °C.
+            </span>
+            {onStation && (
+              <>
+                <span className="text-xs text-[var(--sim-neutral-600)] leading-tight">
+                  Metal went in at {bench.cupMetalTemp.toFixed(1)} °C.
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase text-[var(--sim-label)]">
+                  <span
+                    aria-hidden
+                    className={`h-2.5 w-2.5 rounded-full ${cupSettled(bench) ? "bg-green-600" : "bg-orange-500 animate-pulse"}`}
+                  />
+                  {cupSettled(bench) ? "Stable" : "Settling"}
+                </span>
+              </>
+            )}
+          </>
+        )}
         {isTinCan && (
           <>
             <span className="font-mono text-2xl font-semibold text-[var(--sim-neutral-900)] tabular-nums">
