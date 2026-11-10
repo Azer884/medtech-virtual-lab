@@ -1,6 +1,6 @@
 "use client";
 
-import { RefObject, useCallback, useEffect, useRef } from "react";
+import { RefObject, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   UNITY_BRIDGE_OBJECT,
   UNITY_EVENT_NAME,
@@ -52,18 +52,22 @@ export default function CalorimetryUnity({ snapshot, probeRef, onHeaterToggle }:
     productName: "Calorimetry Workbench",
   });
 
+  // Compared as text, so a new snapshot object that says the same thing as
+  // the last one costs Unity nothing: no message, no parse, no redraw.
+  const json = useMemo(() => JSON.stringify(snapshot), [snapshot]);
+  const jsonRef = useRef(json);
+  jsonRef.current = json;
+
   const sendState = useCallback(() => {
-    const instance = instanceRef.current;
-    if (!instance) return;
-    instance.SendMessage(UNITY_BRIDGE_OBJECT, "SetState", JSON.stringify(snapshot));
-  }, [instanceRef, snapshot]);
+    instanceRef.current?.SendMessage(UNITY_BRIDGE_OBJECT, "SetState", jsonRef.current);
+  }, [instanceRef]);
 
   // Push the snapshot whenever it changes, and once more as soon as the
   // instance reports ready, since the player boots after the first renders.
   useEffect(() => {
     if (status !== "ready") return;
     sendState();
-  }, [sendState, status]);
+  }, [sendState, status, json]);
 
   useEffect(() => {
     const handle = (event: Event) => {

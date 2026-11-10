@@ -7,17 +7,22 @@ import StationTabs from "./StationTabs";
 import {
   CalorimetryBench,
   CalorimetrySection,
+  CUP_STATION,
   INITIAL_BENCH,
-  bathSettled,
-  flaskSettled,
+  benchSettled,
   getMaterialsFor,
   getStationsFor,
   ignite,
-  stepBath,
-  stepFlask,
+  stepBench,
+  syncCup,
   uncover,
 } from "./types";
 import { toUnitySnapshot } from "./unityState";
+
+/** How often the bench is advanced, ms. */
+const TICK_MS = 100;
+/** The most one tick may advance the bench, s. */
+const MAX_STEP_SECONDS = 1;
 
 export default function CalorimetrySim() {
   const [activeSection, setActiveSection] = useState<CalorimetrySection>("metal");
@@ -40,10 +45,11 @@ export default function CalorimetrySim() {
     setBench((prev) => {
       const placed = prev.placements[activeSection];
       if (Object.values(placed).includes(materialId)) return prev;
-      return {
+      const next = {
         ...prev,
         placements: { ...prev.placements, [activeSection]: { ...placed, [station.id]: materialId } },
       };
+      return station.id === CUP_STATION ? syncCup(next) : next;
     });
   };
 
@@ -55,6 +61,7 @@ export default function CalorimetrySim() {
       delete placed[station.id];
       const next = { ...prev, placements: { ...prev.placements, [activeSection]: placed } };
       // Taking the sample off the dish means lifting the can off first.
+      if (station.id === CUP_STATION) return syncCup(next);
       return station.id === "tin-can-calorimeter" ? uncover(next) : next;
     });
   };
@@ -66,25 +73,27 @@ export default function CalorimetrySim() {
 
   const igniteSample = () => setBench(ignite);
 
-  // The bath heats and cools in real time whichever station is open, so a
-  // plate left on while weighing elsewhere keeps warming the water.
-  const settled = bathSettled(bench);
+  // Everything back in the inventory, cold water, plate off.
+  const resetBench = () => setBench(INITIAL_BENCH);
+
+  // One clock runs the whole bench in real time, whichever station is open:
+  // the bath heats and cools, a lit sample burns down and warms the flask, the
+  // cup water and the metal in it meet in the middle, and a metal carries the
+  // bath's heat with it. It only ticks while something is still changing.
+  const settled = benchSettled(bench);
   useEffect(() => {
     if (settled) return;
-    const tickMs = 250;
-    const id = window.setInterval(() => setBench((prev) => stepBath(prev, tickMs / 1000)), tickMs);
+    let last = performance.now();
+    const id = window.setInterval(() => {
+      // Real elapsed time, so the bench keeps pace when the browser throttles
+      // the timer in a background tab. Capped, so a long sleep can't jump it.
+      const now = performance.now();
+      const dt = Math.min(MAX_STEP_SECONDS, (now - last) / 1000);
+      last = now;
+      setBench((prev) => stepBench(prev, dt));
+    }, TICK_MS);
     return () => window.clearInterval(id);
   }, [settled]);
-
-  // A lit sample burns down, and the flask water warms and cools, in real
-  // time too, whichever station is open.
-  const flaskIdle = flaskSettled(bench);
-  useEffect(() => {
-    if (flaskIdle) return;
-    const tickMs = 100;
-    const id = window.setInterval(() => setBench((prev) => stepFlask(prev, tickMs / 1000)), tickMs);
-    return () => window.clearInterval(id);
-  }, [flaskIdle]);
 
   // Memoised so Unity only gets a SetState when something it draws changed.
   const snapshot = useMemo(
@@ -109,6 +118,16 @@ export default function CalorimetrySim() {
           onHeaterToggle={toggleHeater}
           onIgnite={igniteSample}
         />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={resetBench}
+            disabled={bench === INITIAL_BENCH}
+            className="border-2 border-[var(--sim-border)] bg-[var(--sim-neutral-0)] px-2.5 py-1 text-xs font-bold tracking-widest uppercase text-[var(--sim-neutral-900)] enabled:hover:border-[var(--sim-accent-700)] disabled:cursor-not-allowed disabled:text-[var(--sim-neutral-500)] disabled:bg-[var(--sim-neutral-50)]"
+          >
+            Reset bench
+          </button>
+        </div>
       </div>
     </div>
   );

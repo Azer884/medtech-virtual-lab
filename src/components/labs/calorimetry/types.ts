@@ -130,7 +130,7 @@ export const BIOMASS_MATERIALS: MaterialInfo[] = [
     id: "wood-chips",
     label: "Wood Chips / Splints",
     icon: "/images/calorimetry/wood-chips.png",
-    look: { color: "#8a5a32", metallic: 0, smoothness: 0.25 },
+    look: { color: "#ffffff", metallic: 0, smoothness: 0.25 },
     massGrams: 2.35,
     heatOfCombustion: 18,
     burnSeconds: 40,
@@ -140,7 +140,7 @@ export const BIOMASS_MATERIALS: MaterialInfo[] = [
     id: "dried-grass",
     label: "Dried Grass / Corn Stalks",
     icon: "/images/calorimetry/dried-grass.png",
-    look: { color: "#b3a24f", metallic: 0, smoothness: 0.2 },
+    look: { color: "#ffffff", metallic: 0, smoothness: 0.2 },
     massGrams: 1.84,
     heatOfCombustion: 16,
     burnSeconds: 25,
@@ -186,6 +186,21 @@ export interface CalorimetryBench {
   flaskTemp: number;
   /** The highest the flask water has reached since it was last filled, °C. */
   flaskMax: number;
+  /** Coffee cup, 0..1. */
+  cupFill: number;
+  /** Cold water in the coffee cup, °C. */
+  cupTemp: number;
+  /** What the cup water settles at with the metal in it, °C. */
+  cupTarget: number;
+  /** Temperature the metal had when it went into the cup, °C. */
+  cupMetalTemp: number;
+  /**
+   * Each metal sample's own temperature, °C, by material id. One missing from
+   * the map is at room temperature. A metal warms towards the bath while
+   * sitting in it, cools slowly in air anywhere else, and in the cup trades
+   * heat with the water. Moving it between stations keeps its temperature.
+   */
+  metalTemps: Record<string, number>;
 }
 
 /** Lab room temperature, °C: where the bath starts and cools back to. */
@@ -213,6 +228,35 @@ const WATER_SPECIFIC_HEAT = 4.184;
 const CAN_EFFICIENCY = 0.25;
 /** Newton's-law loss from the flask water to the room, per second. */
 const FLASK_COOLING_RATE = 0.002;
+/** The metal is dropped into the cold water of this station. */
+export const CUP_STATION = "coffee-cup-calorimeter";
+/** The cup's water starts cold, °C. */
+export const CUP_COLD_TEMP = 10;
+/** Water in the coffee cup, g. */
+export const CUP_WATER_GRAMS = 20;
+/** How fast the cup water closes on its final temperature, per second. */
+const CUP_SETTLE_RATE = 0.3;
+/** Below this gap the cup water counts as settled, °C. */
+const CUP_SETTLED_GAP = 0.05;
+/** The metal is heated in the beaker on this station. */
+export const BATH_STATION = "hot-water-bath";
+/** How fast the metal closes on the bath temperature while in it, per second. */
+const METAL_BATH_RATE = 0.25;
+/** How fast the metal loses heat to the room in air, per second. */
+const METAL_AIR_RATE = 0.004;
+/** Below this gap the metal counts as at its surroundings' temperature, °C. */
+const METAL_SETTLED_GAP = 0.005;
+/**
+ * Steam only comes off the cup while the metal is hot enough to flash water
+ * it touches: none below CUP_STEAM_FROM, full from CUP_STEAM_FULL, °C. A cold
+ * or room-temperature metal never steams.
+ */
+const CUP_STEAM_FROM = 60;
+const CUP_STEAM_FULL = 95;
+/** Steam rises off the bath from this much boil, 0..1. */
+const BATH_STEAM_FROM = 0.5;
+/** Steam rises off the flask from this much boil, 0..1. */
+const FLASK_STEAM_FROM = 0.6;
 /** Biomass burns on the tin can calorimeter's dish. */
 const BURN_STATION = "tin-can-calorimeter";
 /** What a burnt sample looks like: ash and char. */
@@ -231,7 +275,17 @@ export const INITIAL_BENCH: CalorimetryBench = {
   covered: false,
   flaskTemp: ROOM_TEMP,
   flaskMax: ROOM_TEMP,
+  cupFill: 0.65,
+  cupTemp: CUP_COLD_TEMP,
+  cupTarget: CUP_COLD_TEMP,
+  cupMetalTemp: ROOM_TEMP,
+  metalTemps: {},
 };
+
+/** A metal sample's temperature now, °C. */
+export function metalTempOf(bench: CalorimetryBench, materialId: string): number {
+  return bench.metalTemps[materialId] ?? ROOM_TEMP;
+}
 
 /** The sample on a station, or undefined when the station is empty. */
 export function sampleAt(
@@ -343,6 +397,148 @@ export function stepFlask(bench: CalorimetryBench, dt: number): CalorimetryBench
 /** True once the tin can has nothing left to do: nothing alight and the water back at room temperature. */
 export function flaskSettled(bench: CalorimetryBench): boolean {
   return bench.burning === null && bench.flaskTemp <= ROOM_TEMP;
+}
+
+/**
+ * Re-reads the metal in the coffee cup. Dropping a metal in sets the
+ * temperature both will settle at, from the heat the metal carries in;
+ * taking it out swaps in fresh cold water. The metal keeps its own
+ * temperature either way.
+ */
+export function syncCup(bench: CalorimetryBench): CalorimetryBench {
+  const metal = sampleAt(bench, "metal", CUP_STATION);
+  if (!metal) {
+    return { ...bench, cupTemp: CUP_COLD_TEMP, cupTarget: CUP_COLD_TEMP };
+  }
+
+  const metalTemp = metalTempOf(bench, metal.id);
+  const waterHeat = CUP_WATER_GRAMS * WATER_SPECIFIC_HEAT;
+  const metalHeat = metal.massGrams * (metal.specificHeat ?? 0);
+  const cupTarget = (waterHeat * bench.cupTemp + metalHeat * metalTemp) / (waterHeat + metalHeat);
+  return { ...bench, cupTarget, cupMetalTemp: metalTemp };
+}
+
+/** Moves temp towards target by dt seconds at rate, snapping once within gap. */
+function relax(temp: number, target: number, rate: number, dt: number, gap: number): number {
+  const diff = target - temp;
+  if (Math.abs(diff) <= gap) return target;
+  return temp + diff * (1 - Math.exp(-rate * dt));
+}
+
+/**
+ * Advances the cup by dt seconds. With a metal in it, the water and the
+ * metal close on their shared final temperature at the same rate, so the heat
+ * the water gains is the heat the metal loses: the metal cools by warming the
+ * water. Without one, the water only drifts to its target.
+ */
+export function stepCup(bench: CalorimetryBench, dt: number): CalorimetryBench {
+  const cupTemp = relax(bench.cupTemp, bench.cupTarget, CUP_SETTLE_RATE, dt, CUP_SETTLED_GAP);
+  const metal = sampleAt(bench, "metal", CUP_STATION);
+  if (!metal) return { ...bench, cupTemp };
+  const metalTemp = relax(metalTempOf(bench, metal.id), bench.cupTarget, CUP_SETTLE_RATE, dt, CUP_SETTLED_GAP);
+  return { ...bench, cupTemp, metalTemps: { ...bench.metalTemps, [metal.id]: metalTemp } };
+}
+
+/** True once the cup water, and the metal in it if any, have reached their final temperature. */
+export function cupSettled(bench: CalorimetryBench): boolean {
+  if (bench.cupTemp !== bench.cupTarget) return false;
+  const metal = sampleAt(bench, "metal", CUP_STATION);
+  return !metal || metalTempOf(bench, metal.id) === bench.cupTarget;
+}
+
+/** What a metal outside the cup is closing on, °C, and how fast, per second. */
+function metalSurroundings(bench: CalorimetryBench, materialId: string): { temp: number; rate: number } {
+  return bench.placements.metal[BATH_STATION] === materialId
+    ? { temp: bench.bathTemp, rate: METAL_BATH_RATE }
+    : { temp: ROOM_TEMP, rate: METAL_AIR_RATE };
+}
+
+/**
+ * Advances every metal's temperature by dt seconds wherever it is outside the
+ * cup: the one in the bath warms towards it, the rest cool slowly in air
+ * towards the room, on a station or back in the inventory. In the cup,
+ * stepCup owns it.
+ */
+export function stepMetal(bench: CalorimetryBench, dt: number): CalorimetryBench {
+  const inCup = bench.placements.metal[CUP_STATION];
+  let metalTemps = bench.metalTemps;
+  for (const { id } of METAL_MATERIALS) {
+    if (id === inCup) continue;
+    const { temp, rate } = metalSurroundings(bench, id);
+    const now = metalTempOf(bench, id);
+    const next = relax(now, temp, rate, dt, METAL_SETTLED_GAP);
+    if (next === now) continue;
+    if (metalTemps === bench.metalTemps) metalTemps = { ...metalTemps };
+    metalTemps[id] = next;
+  }
+  return metalTemps === bench.metalTemps ? bench : { ...bench, metalTemps };
+}
+
+/** True once stepMetal has nothing to do: every metal outside the cup is at its surroundings' temperature. */
+export function metalSettled(bench: CalorimetryBench): boolean {
+  const inCup = bench.placements.metal[CUP_STATION];
+  return METAL_MATERIALS.every(
+    ({ id }) => id === inCup || metalTempOf(bench, id) === metalSurroundings(bench, id).temp,
+  );
+}
+
+/**
+ * Advances the whole bench by dt seconds: the bath, the tin can, the cup and
+ * the metals, each only while it has something left to do. Returns the same
+ * bench when nothing moved, so an idle bench costs no render.
+ */
+export function stepBench(bench: CalorimetryBench, dt: number): CalorimetryBench {
+  let next = stepBath(bench, dt);
+  if (!flaskSettled(next)) next = stepFlask(next, dt);
+  if (!cupSettled(next)) next = stepCup(next, dt);
+  return stepMetal(next, dt);
+}
+
+/** True once nothing on the bench is changing, so its clock can stop. */
+export function benchSettled(bench: CalorimetryBench): boolean {
+  return bathSettled(bench) && flaskSettled(bench) && cupSettled(bench) && metalSettled(bench);
+}
+
+/**
+ * Steam off the cup, 0..1: a hot metal just dropped into cold water makes
+ * the most, dying away as it cools in the water. None without a metal, and
+ * none from a cold one.
+ */
+export function cupSteam(bench: CalorimetryBench): number {
+  const metal = sampleAt(bench, "metal", CUP_STATION);
+  if (!metal) return 0;
+  return clamp01((metalTempOf(bench, metal.id) - CUP_STEAM_FROM) / (CUP_STEAM_FULL - CUP_STEAM_FROM));
+}
+
+/** Steam off the bath, 0..1: none below half boil, full at a rolling boil. */
+export function bathSteam(bench: CalorimetryBench): number {
+  return clamp01((bathBoil(bench) - BATH_STEAM_FROM) / (1 - BATH_STEAM_FROM));
+}
+
+/** Steam off the flask, 0..1: none below a good simmer, full at a rolling boil. */
+export function flaskSteam(bench: CalorimetryBench): number {
+  return clamp01((flaskBoil(bench) - FLASK_STEAM_FROM) / (1 - FLASK_STEAM_FROM));
+}
+
+function clamp01(x: number): number {
+  return Math.min(1, Math.max(0, x));
+}
+
+/** Whether a metal is in the cup, which is when the thermometer goes in. */
+export function cupHasMetal(bench: CalorimetryBench): boolean {
+  return !!sampleAt(bench, "metal", CUP_STATION);
+}
+
+/**
+ * How hard the flask water bubbles, 0..1. Not at once when the can goes on:
+ * the water has to warm first, so bubbles build up with its temperature, a
+ * little stronger while the flame is still under it, and die away as it cools.
+ * Only with the can on.
+ */
+export function flaskBoil(bench: CalorimetryBench): number {
+  if (!bench.covered) return 0;
+  const warm = Math.min(1, Math.max(0, (bench.flaskTemp - ROOM_TEMP - 4) / 22));
+  return Math.min(1, warm * (0.7 + 0.3 * flameStrength(bench)));
 }
 
 /** Seconds of burning left, or 0 when nothing is alight. */
